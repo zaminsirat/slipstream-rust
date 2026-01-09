@@ -27,7 +27,7 @@ pub fn encode(input: &[u8]) -> String {
         return String::new();
     }
 
-    let mut out = String::with_capacity((input.len() * 8 + 4) / 5);
+    let mut out = String::with_capacity((input.len() * 8).div_ceil(5));
     let mut buffer: u32 = 0;
     let mut bits: u8 = 0;
 
@@ -85,7 +85,7 @@ pub fn decode(input: &str) -> Result<Vec<u8>, Base32Error> {
     }
 
     if pad > 0 {
-        if cleaned[..len].iter().any(|&c| c == b'=') {
+        if cleaned[..len].contains(&b'=') {
             return Err(Base32Error::InvalidPadding);
         }
         if cleaned.len() < 8 || cleaned.len() % 8 != 0 || pad > 6 {

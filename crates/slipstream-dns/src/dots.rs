@@ -15,7 +15,7 @@ pub fn dotify(input: &str) -> String {
     let mut src = len as isize - 1;
     let mut dst = new_len as isize - 1;
     let mut next_dot = len - (len % 57);
-    if len % 57 == 0 {
+    if len.is_multiple_of(57) {
         next_dot = len - 57;
     }
     let mut current_pos = len;

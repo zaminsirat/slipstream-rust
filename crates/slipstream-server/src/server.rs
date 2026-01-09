@@ -87,6 +87,7 @@ enum StreamWrite {
     Fin,
 }
 
+#[allow(clippy::enum_variant_names)]
 enum Command {
     StreamConnected {
         cnx_id: usize,
@@ -546,7 +547,7 @@ unsafe extern "C" fn server_callback(
                 let has_stash = stream
                     .send_stash
                     .as_ref()
-                    .map_or(false, |data| !data.is_empty());
+                    .is_some_and(|data| !data.is_empty());
                 let has_pending = pending_flag || has_stash;
 
                 if length == 0 {
@@ -567,16 +568,16 @@ unsafe extern "C" fn server_callback(
 
                 let mut send_data: Option<Vec<u8>> = None;
                 if let Some(mut stash) = stream.send_stash.take() {
-                    if stash.len() > length as usize {
-                        let remainder = stash.split_off(length as usize);
+                    if stash.len() > length {
+                        let remainder = stash.split_off(length);
                         stream.send_stash = Some(remainder);
                     }
                     send_data = Some(stash);
                 } else if let Some(rx) = stream.data_rx.as_mut() {
                     match rx.try_recv() {
                         Ok(mut data) => {
-                            if data.len() > length as usize {
-                                let remainder = data.split_off(length as usize);
+                            if data.len() > length {
+                                let remainder = data.split_off(length);
                                 stream.send_stash = Some(remainder);
                             }
                             send_data = Some(data);

@@ -206,7 +206,7 @@ fn decode_hex(hex: &str) -> Vec<u8> {
     if hex.is_empty() {
         return Vec::new();
     }
-    assert!(hex.len() % 2 == 0, "hex length must be even");
+    assert!(hex.len().is_multiple_of(2), "hex length must be even");
     let mut out = Vec::with_capacity(hex.len() / 2);
     let bytes = hex.as_bytes();
     for i in (0..bytes.len()).step_by(2) {

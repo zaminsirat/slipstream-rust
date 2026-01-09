@@ -57,7 +57,7 @@ fn base32_len(payload_len: usize) -> usize {
     if payload_len == 0 {
         return 0;
     }
-    (payload_len * 8 + 4) / 5
+    (payload_len * 8).div_ceil(5)
 }
 
 #[cfg(test)]

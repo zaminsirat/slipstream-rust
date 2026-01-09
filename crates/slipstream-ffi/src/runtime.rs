@@ -33,11 +33,17 @@ impl Drop for QuicGuard {
     }
 }
 
+/// # Safety
+/// Caller must pass valid picoquic pointers and a valid null-terminated congestion
+/// control algorithm name.
 pub unsafe fn configure_quic(quic: *mut picoquic_quic_t, cc_algo: *const c_char, mtu: u32) {
     configure_quic_common(quic, mtu);
     picoquic_set_default_congestion_algorithm_by_name(quic, cc_algo);
 }
 
+/// # Safety
+/// Caller must pass valid picoquic pointers and a congestion algorithm pointer
+/// that remains valid for the lifetime of the QUIC context.
 pub unsafe fn configure_quic_with_custom(
     quic: *mut picoquic_quic_t,
     algo: *mut picoquic_congestion_algorithm_t,
@@ -124,7 +130,9 @@ pub fn sockaddr_storage_to_socket_addr(storage: &sockaddr_storage) -> Result<Soc
     }
 }
 
-pub fn write_stream_or_reset(
+/// # Safety
+/// Caller must ensure `cnx` points to a valid picoquic connection.
+pub unsafe fn write_stream_or_reset(
     stream: &mut TcpStream,
     data: &[u8],
     cnx: *mut picoquic_cnx_t,
@@ -136,7 +144,7 @@ pub fn write_stream_or_reset(
         } else {
             SLIPSTREAM_INTERNAL_ERROR
         };
-        let _ = unsafe { picoquic_reset_stream(cnx, stream_id, code) };
+        let _ = picoquic_reset_stream(cnx, stream_id, code);
         let _ = stream.shutdown(Shutdown::Both);
         return true;
     }

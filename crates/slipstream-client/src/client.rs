@@ -278,7 +278,7 @@ pub async fn run_client(config: &ClientConfig<'_>) -> Result<i32, ClientError> {
         let delay_us =
             unsafe { picoquic_get_next_wake_delay(quic, current_time, DNS_WAKE_DELAY_MAX_US) };
         let delay_us = if delay_us < 0 { 0 } else { delay_us as u64 };
-        let timeout_us = delay_us.min(DNS_POLL_SLICE_US).max(1);
+        let timeout_us = delay_us.clamp(1, DNS_POLL_SLICE_US);
         let timeout = Duration::from_micros(timeout_us);
 
         tokio::select! {
@@ -728,7 +728,6 @@ fn handle_command(cnx: *mut picoquic_cnx_t, state_ptr: *mut ClientState, command
             }
         }
         Command::StreamData { stream_id, data } => {
-            let cnx = cnx;
             let ret =
                 unsafe { picoquic_add_to_stream(cnx, stream_id, data.as_ptr(), data.len(), 0) };
             if ret < 0 {
@@ -893,7 +892,7 @@ fn spawn_client_writer(
                         }
                     }
                     let len = buffer.len();
-                    if let Err(_) = write_half.write_all(&buffer).await {
+                    if write_half.write_all(&buffer).await.is_err() {
                         let _ = command_tx.send(Command::StreamWriteError { stream_id });
                         return;
                     }
@@ -953,6 +952,7 @@ fn handle_dns_response(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn send_poll_queries(
     cnx: *mut picoquic_cnx_t,
     udp: &TokioUdpSocket,
@@ -1145,7 +1145,7 @@ fn path_probe_backoff(attempts: u32) -> u64 {
 fn sockaddr_storage_to_socket_addr(
     storage: &libc::sockaddr_storage,
 ) -> Result<SocketAddr, ClientError> {
-    slipstream_ffi::sockaddr_storage_to_socket_addr(storage).map_err(|err| ClientError::new(err))
+    slipstream_ffi::sockaddr_storage_to_socket_addr(storage).map_err(ClientError::new)
 }
 
 fn map_io(err: std::io::Error) -> ClientError {

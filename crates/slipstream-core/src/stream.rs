@@ -23,6 +23,12 @@ impl StreamRecvState {
     }
 }
 
+impl Default for StreamRecvState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn insert_stream_chunk(
     chunks: &mut BTreeMap<u64, Vec<u8>>,
     sent_offset: u64,

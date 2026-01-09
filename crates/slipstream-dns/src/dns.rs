@@ -119,10 +119,7 @@ pub fn decode_query(packet: &[u8], domain: &str) -> Result<DecodedQuery, DecodeQ
     let cd = header.cd;
 
     if header.is_response {
-        let question = match parse_question_for_reply(packet, header.qdcount, header.offset) {
-            Ok(question) => question,
-            Err(err) => return Err(err),
-        };
+        let question = parse_question_for_reply(packet, header.qdcount, header.offset)?;
         return Err(DecodeQueryError::Reply {
             id: header.id,
             rd,
@@ -133,10 +130,7 @@ pub fn decode_query(packet: &[u8], domain: &str) -> Result<DecodedQuery, DecodeQ
     }
 
     if header.qdcount != 1 {
-        let question = match parse_question_for_reply(packet, header.qdcount, header.offset) {
-            Ok(question) => question,
-            Err(err) => return Err(err),
-        };
+        let question = parse_question_for_reply(packet, header.qdcount, header.offset)?;
         return Err(DecodeQueryError::Reply {
             id: header.id,
             rd,
@@ -241,12 +235,10 @@ pub fn encode_query(params: &QueryParams<'_>) -> Result<Vec<u8>, DnsError> {
 pub fn encode_response(params: &ResponseParams<'_>) -> Result<Vec<u8>, DnsError> {
     let payload_len = params.payload.map(|payload| payload.len()).unwrap_or(0);
 
-    let mut rcode = params.rcode.unwrap_or_else(|| {
-        if payload_len > 0 {
-            Rcode::Ok
-        } else {
-            Rcode::NameError
-        }
+    let mut rcode = params.rcode.unwrap_or(if payload_len > 0 {
+        Rcode::Ok
+    } else {
+        Rcode::NameError
     });
 
     let mut ancount = 0u16;
@@ -282,7 +274,7 @@ pub fn encode_response(params: &ResponseParams<'_>) -> Result<Vec<u8>, DnsError>
         write_u16(&mut out, params.question.qtype);
         write_u16(&mut out, params.question.qclass);
         write_u32(&mut out, 60);
-        let chunk_count = (payload_len + 254) / 255;
+        let chunk_count = payload_len.div_ceil(255);
         let rdata_len = payload_len + chunk_count;
         if rdata_len > u16::MAX as usize {
             return Err(DnsError::new("payload too long"));
@@ -603,6 +595,33 @@ fn encode_name(name: &str, out: &mut Vec<u8>) -> Result<(), DnsError> {
     Ok(())
 }
 
+fn read_u16(packet: &[u8], offset: usize) -> Option<u16> {
+    if offset + 2 > packet.len() {
+        return None;
+    }
+    Some(u16::from_be_bytes([packet[offset], packet[offset + 1]]))
+}
+
+fn read_u32(packet: &[u8], offset: usize) -> Option<u32> {
+    if offset + 4 > packet.len() {
+        return None;
+    }
+    Some(u32::from_be_bytes([
+        packet[offset],
+        packet[offset + 1],
+        packet[offset + 2],
+        packet[offset + 3],
+    ]))
+}
+
+fn write_u16(out: &mut Vec<u8>, value: u16) {
+    out.extend_from_slice(&value.to_be_bytes());
+}
+
+fn write_u32(out: &mut Vec<u8>, value: u32) {
+    out.extend_from_slice(&value.to_be_bytes());
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -638,7 +657,7 @@ mod tests {
         let labels = [63usize, 63, 63, 61];
         for len in labels {
             packet.push(len as u8);
-            packet.extend(std::iter::repeat(b'a').take(len));
+            packet.extend(std::iter::repeat_n(b'a', len));
         }
         packet.push(0);
         assert!(parse_name(&packet, 0).is_ok());
@@ -647,7 +666,7 @@ mod tests {
         let labels = [63usize, 63, 63, 62];
         for len in labels {
             packet.push(len as u8);
-            packet.extend(std::iter::repeat(b'a').take(len));
+            packet.extend(std::iter::repeat_n(b'a', len));
         }
         packet.push(0);
         assert!(parse_name(&packet, 0).is_err());
@@ -671,31 +690,4 @@ mod tests {
         };
         assert!(encode_response(&params).is_err());
     }
-}
-
-fn read_u16(packet: &[u8], offset: usize) -> Option<u16> {
-    if offset + 2 > packet.len() {
-        return None;
-    }
-    Some(u16::from_be_bytes([packet[offset], packet[offset + 1]]))
-}
-
-fn read_u32(packet: &[u8], offset: usize) -> Option<u32> {
-    if offset + 4 > packet.len() {
-        return None;
-    }
-    Some(u32::from_be_bytes([
-        packet[offset],
-        packet[offset + 1],
-        packet[offset + 2],
-        packet[offset + 3],
-    ]))
-}
-
-fn write_u16(out: &mut Vec<u8>, value: u16) {
-    out.extend_from_slice(&value.to_be_bytes());
-}
-
-fn write_u32(out: &mut Vec<u8>, value: u32) {
-    out.extend_from_slice(&value.to_be_bytes());
 }

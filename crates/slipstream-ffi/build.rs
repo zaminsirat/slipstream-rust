@@ -24,12 +24,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         picoquic_lib_dir = locate_picoquic_lib_dir();
     }
 
-    let picoquic_include_dir = picoquic_include_dir.ok_or_else(|| {
-        "Missing picoquic headers; set PICOQUIC_DIR or PICOQUIC_INCLUDE_DIR (default: vendor/picoquic)."
-    })?;
-    let picoquic_lib_dir = picoquic_lib_dir.ok_or_else(|| {
-        "Missing picoquic build artifacts; run ./scripts/build_picoquic.sh or set PICOQUIC_BUILD_DIR/PICOQUIC_LIB_DIR."
-    })?;
+    let picoquic_include_dir = picoquic_include_dir.ok_or(
+        "Missing picoquic headers; set PICOQUIC_DIR or PICOQUIC_INCLUDE_DIR (default: vendor/picoquic).",
+    )?;
+    let picoquic_lib_dir = picoquic_lib_dir.ok_or(
+        "Missing picoquic build artifacts; run ./scripts/build_picoquic.sh or set PICOQUIC_BUILD_DIR/PICOQUIC_LIB_DIR.",
+    )?;
 
     let mut object_paths = Vec::with_capacity(1);
 
@@ -63,9 +63,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rustc-link-search=native={}", out_dir.display());
     println!("cargo:rustc-link-lib=static=slipstream_client_objs");
 
-    let picoquic_libs = resolve_picoquic_libs(&picoquic_lib_dir).ok_or_else(|| {
-        "Missing picoquic build artifacts; run ./scripts/build_picoquic.sh or set PICOQUIC_BUILD_DIR/PICOQUIC_LIB_DIR."
-    })?;
+    let picoquic_libs = resolve_picoquic_libs(&picoquic_lib_dir).ok_or(
+        "Missing picoquic build artifacts; run ./scripts/build_picoquic.sh or set PICOQUIC_BUILD_DIR/PICOQUIC_LIB_DIR.",
+    )?;
     for dir in picoquic_libs.search_dirs {
         println!("cargo:rustc-link-search=native={}", dir.display());
     }

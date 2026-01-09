@@ -29,12 +29,31 @@ jobs:
       - name: Rust fmt
         run: cargo fmt --check
 
+      - name: Rust clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
       - name: Rust tests
         env:
           RUST_BACKTRACE: "1"
         run: |
           cargo test -p slipstream-dns
           cargo test
+
+  cargo-audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out slipstream-rust
+        uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Run cargo audit
+        run: cargo audit
 
   interop:
     name: Interop (${{ matrix.script }})
