@@ -1,0 +1,23 @@
+name: Build Mac Client
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: brew install cmake pkg-config openssl
+
+      - name: Build Client
+        run: cargo build --release -p slipstream-client
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slipstream-client-mac
+          path: target/release/slipstream-client
