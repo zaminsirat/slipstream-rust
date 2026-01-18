@@ -10,7 +10,8 @@ jobs:
         with:
           submodules: recursive
 
-      # ۱. تنظیم نسخه CMake سازگار
+      # ۱. نصب نسخه خاص CMake (حل مشکل اصلی)
+      # این اکشن CMake جدید و ناسازگار را با نسخه ۳.۲۹ جایگزین می‌کند
       - name: Setup CMake 3.29
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -20,25 +21,12 @@ jobs:
       - name: Install dependencies
         run: brew install pkg-config openssl
 
-      # ۳. ساخت دستی کتابخانه C
-      - name: Build Picoquic Manually
-        run: |
-          chmod +x scripts/build_picoquic.sh
-          ./scripts/build_picoquic.sh
-
-      # ۴. بیلد کردن کلاینت (با آدرس‌دهی دقیق)
+      # ۳. بیلد استاندارد (بدون اسکریپت دستی)
+      # حالا که CMake درست شده، خود کارگو می‌تواند همه چیز را بسازد
       - name: Build Client
         run: cargo build --release -p slipstream-client
-        env:
-          PICOQUIC_AUTO_BUILD: 0
-          # آدرس‌دهی مستقیم به جایی که اسکریپت فایل‌ها را ساخته است
-          PICOQUIC_BUILD_DIR: ${{ github.workspace }}/.picoquic-build
-          PICOQUIC_LIB_DIR: ${{ github.workspace }}/.picoquic-build
-          # آدرس هدرهای مورد نیاز
-          PICOQUIC_INCLUDE_DIR: ${{ github.workspace }}/vendor/picoquic/picoquic
-          PICOTLS_INCLUDE_DIR: ${{ github.workspace }}/.picoquic-build/_deps/picotls-src/include
 
-      # ۵. آپلود فایل
+      # ۴. آپلود
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
