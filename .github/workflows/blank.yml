@@ -20,86 +20,23 @@ jobs:
       - name: Install dependencies
         run: |
           brew install pkg-config openssl@3
-          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
-          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
-
-      - name: Build Picoquic
+          
+      - name: Build slipstream-client (with auto picoquic build)
+        env:
+          OPENSSL_ROOT_DIR: /opt/homebrew/opt/openssl@3
+          OPENSSL_DIR: /opt/homebrew/opt/openssl@3
+          PKG_CONFIG_PATH: /opt/homebrew/opt/openssl@3/lib/pkgconfig
+          # Don't set PICOQUIC_AUTO_BUILD=0, let cargo auto-build it
         run: |
-          chmod +x scripts/build_picoquic.sh
-          ./scripts/build_picoquic.sh
+          # Show OpenSSL location
+          echo "OpenSSL location: $(brew --prefix openssl@3)"
           
-          echo "=== Build script completed ==="
+          # Update env vars with actual brew prefix (in case it's different)
+          export OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
+          export OPENSSL_DIR=$(brew --prefix openssl@3)
+          export PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig
           
-          # Show full directory structure of .picoquic-build
-          echo "=== Full .picoquic-build structure ==="
-          ls -laR .picoquic-build 2>/dev/null | head -100 || echo ".picoquic-build directory not found"
-          
-          echo "=== Looking for all .a files ==="
-          find . -name "*.a" -type f 2>/dev/null
-          
-          echo "=== Looking for picoquic headers ==="
-          find . -name "picoquic.h" -type f 2>/dev/null
-
-      - name: Set Picoquic environment variables
-        run: |
-          BUILD_DIR="${{ github.workspace }}/.picoquic-build"
-          
-          echo "=== Checking BUILD_DIR exists ==="
-          ls -la "$BUILD_DIR" || echo "BUILD_DIR not found!"
-          
-          # Find the library directory
-          LIB_DIR=$(find "$BUILD_DIR" -name "libpicoquic-core.a" -exec dirname {} \; 2>/dev/null | head -n 1)
-          
-          # If not found in .picoquic-build, search entire workspace
-          if [ -z "$LIB_DIR" ]; then
-            echo "Not found in BUILD_DIR, searching entire workspace..."
-            LIB_DIR=$(find "${{ github.workspace }}" -name "libpicoquic-core.a" -exec dirname {} \; 2>/dev/null | head -n 1)
-          fi
-          
-          if [ -z "$LIB_DIR" ]; then
-            echo "ERROR: Could not find libpicoquic-core.a anywhere!"
-            echo "=== All .a files in workspace ==="
-            find "${{ github.workspace }}" -name "*.a" -type f 2>/dev/null
-            exit 1
-          fi
-          
-          echo "Found LIB_DIR: $LIB_DIR"
-          echo "Contents of LIB_DIR:"
-          ls -la "$LIB_DIR"
-          
-          # Find picotls include directory
-          PICOTLS_INC=$(find "$BUILD_DIR" -type d -path "*picotls*/include" 2>/dev/null | head -n 1)
-          if [ -z "$PICOTLS_INC" ]; then
-            PICOTLS_INC=$(find "$BUILD_DIR" -type d -name "include" 2>/dev/null | grep -i picotls | head -n 1)
-          fi
-          echo "Found PICOTLS_INC: $PICOTLS_INC"
-          
-          # Write to GITHUB_ENV so variables persist to next step
-          echo "PICOQUIC_AUTO_BUILD=0" >> $GITHUB_ENV
-          echo "PICOQUIC_LIB_DIR=$LIB_DIR" >> $GITHUB_ENV
-          echo "PICOQUIC_BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
-          echo "PICOQUIC_INCLUDE_DIR=${{ github.workspace }}/vendor/picoquic/picoquic" >> $GITHUB_ENV
-          
-          if [ -n "$PICOTLS_INC" ]; then
-            echo "PICOTLS_INCLUDE_DIR=$PICOTLS_INC" >> $GITHUB_ENV
-          fi
-
-      - name: Verify environment and build
-        run: |
-          echo "=== Environment variables ==="
-          echo "PICOQUIC_AUTO_BUILD=$PICOQUIC_AUTO_BUILD"
-          echo "PICOQUIC_LIB_DIR=$PICOQUIC_LIB_DIR"
-          echo "PICOQUIC_BUILD_DIR=$PICOQUIC_BUILD_DIR"
-          echo "PICOQUIC_INCLUDE_DIR=$PICOQUIC_INCLUDE_DIR"
-          echo "PICOTLS_INCLUDE_DIR=$PICOTLS_INCLUDE_DIR"
-          
-          echo "=== Verifying paths exist ==="
-          test -d "$PICOQUIC_LIB_DIR" && echo "LIB_DIR exists" || echo "LIB_DIR MISSING!"
-          test -f "$PICOQUIC_LIB_DIR/libpicoquic-core.a" && echo "libpicoquic-core.a exists" || echo "libpicoquic-core.a MISSING!"
-          test -d "$PICOQUIC_INCLUDE_DIR" && echo "INCLUDE_DIR exists" || echo "INCLUDE_DIR MISSING!"
-          
-          echo "=== Starting cargo build ==="
+          # Let cargo auto-build picoquic
           cargo build --release -p slipstream-client
 
       - name: Upload Artifact
