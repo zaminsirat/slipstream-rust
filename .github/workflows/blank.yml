@@ -10,23 +10,43 @@ jobs:
         with:
           submodules: recursive
 
-      # ۱. نصب نسخه خاص CMake (حل مشکل اصلی)
-      # این اکشن CMake جدید و ناسازگار را با نسخه ۳.۲۹ جایگزین می‌کند
+      # ۱. تنظیم CMake 3.29 (حیاتی برای این پروژه)
       - name: Setup CMake 3.29
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.29.x'
 
-      # ۲. نصب پیش‌نیازها
+      # ۲. نصب OpenSSL و pkg-config
       - name: Install dependencies
-        run: brew install pkg-config openssl
+        run: |
+          brew install pkg-config openssl
+          # تنظیم متغیرهای محیطی برای اینکه OpenSSL در مک پیدا شود
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$(brew --prefix openssl)/lib/pkgconfig" >> $GITHUB_ENV
 
-      # ۳. بیلد استاندارد (بدون اسکریپت دستی)
-      # حالا که CMake درست شده، خود کارگو می‌تواند همه چیز را بسازد
-      - name: Build Client
-        run: cargo build --release -p slipstream-client
+      # ۳. ساخت دستی کتابخانه Picoquic
+      - name: Build Picoquic Manually
+        run: |
+          chmod +x scripts/build_picoquic.sh
+          ./scripts/build_picoquic.sh
 
-      # ۴. آپلود
+      # ۴. پیدا کردن هوشمند مسیر فایل‌ها (جادوی کار اینجاست!)
+      # این دستور می‌گردد ببیند فایل libpicoquic-core.a دقیقاً کجاست و آدرسش را ذخیره می‌کند
+      - name: Locate Libraries and Build
+        run: |
+          # پیدا کردن مسیر فایل ساخته شده
+          LIB_PATH=$(find . -name "libpicoquic-core.a" -exec dirname {} \; | head -n 1)
+          echo "Library found at: $LIB_PATH"
+          
+          # اجرای بیلد با آدرس دقیق پیدا شده
+          export PICOQUIC_AUTO_BUILD=0
+          export PICOQUIC_LIB_DIR="$LIB_PATH"
+          export PICOQUIC_INCLUDE_DIR="${{ github.workspace }}/vendor/picoquic/picoquic"
+          export PICOTLS_INCLUDE_DIR="${{ github.workspace }}/.picoquic-build/_deps/picotls-src/include"
+          
+          cargo build --release -p slipstream-client
+
+      # ۵. آپلود فایل نهایی
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
