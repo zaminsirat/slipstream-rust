@@ -22,45 +22,25 @@ jobs:
       - name: Install dependencies
         run: brew install pkg-config openssl@3
 
-      - name: Build Picoquic
+      - name: Set OpenSSL environment
         run: |
-          export OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
-          export OPENSSL_DIR=$(brew --prefix openssl@3)
-          export PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig
-          
-          chmod +x scripts/build_picoquic.sh
-          ./scripts/build_picoquic.sh
-
-      - name: Set environment variables
-        run: |
-          BUILD_DIR="${{ github.workspace }}/.picoquic-build"
-          VENDOR_DIR="${{ github.workspace }}/vendor/picoquic"
-          
-          echo "PICOQUIC_AUTO_BUILD=0" >> $GITHUB_ENV
-          echo "PICOQUIC_BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
-          echo "PICOQUIC_LIB_DIR=$BUILD_DIR" >> $GITHUB_ENV
-          echo "PICOQUIC_INCLUDE_DIR=$VENDOR_DIR/picoquic" >> $GITHUB_ENV
-          echo "PICOTLS_INCLUDE_DIR=$BUILD_DIR/_deps/picotls-src/include" >> $GITHUB_ENV
-          echo "PICOQUIC_DIR=$VENDOR_DIR" >> $GITHUB_ENV
           echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
           echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
 
-      - name: Build slipstream-client
-        run: cargo build --release -p slipstream-client
-
-      - name: Find built binary
+      - name: Build slipstream-client (let cargo auto-build picoquic)
         run: |
-          echo "=== Contents of target/release ==="
-          ls -la target/release/ | head -30
+          # Do NOT set PICOQUIC_AUTO_BUILD=0 - let cargo handle it automatically
+          cargo build --release -p slipstream-client
+
+      - name: Find and list built binaries
+        run: |
+          echo "=== Looking for built binaries ==="
+          find target/release -maxdepth 1 -type f -perm +111 ! -name "*.d" ! -name "build" 2>/dev/null | head -20
           
           echo ""
-          echo "=== All executables in target/release ==="
-          find target/release -maxdepth 1 -type f -perm +111 ! -name "*.d" ! -name "*.rlib" | head -20
-          
-          echo ""
-          echo "=== Looking for slipstream* files ==="
-          find target/release -maxdepth 1 -name "slipstream*" -type f
+          echo "=== Files matching slipstream* ==="
+          find target/release -maxdepth 1 -name "slipstream*" -type f 2>/dev/null
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -70,3 +50,4 @@ jobs:
             target/release/slipstream*
             !target/release/*.d
             !target/release/*.rlib
+          if-no-files-found: warn
