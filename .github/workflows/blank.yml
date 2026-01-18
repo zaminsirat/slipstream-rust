@@ -1,53 +1,61 @@
 name: Build Mac Client
-
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15-arm64
     
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
+          
       - name: Setup CMake 3.29
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.29.x'
-
+          
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-
+        
       - name: Install dependencies
         run: brew install pkg-config openssl@3
-
+        
       - name: Set OpenSSL environment
         run: |
           echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
           echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
-
-      - name: Build slipstream-client (let cargo auto-build picoquic)
-        run: |
-          # Do NOT set PICOQUIC_AUTO_BUILD=0 - let cargo handle it automatically
-          cargo build --release -p slipstream-client
-
-      - name: Find and list built binaries
-        run: |
-          echo "=== Looking for built binaries ==="
-          find target/release -maxdepth 1 -type f -perm +111 ! -name "*.d" ! -name "build" 2>/dev/null | head -20
           
-          echo ""
-          echo "=== Files matching slipstream* ==="
-          find target/release -maxdepth 1 -name "slipstream*" -type f 2>/dev/null
-
+      - name: Build picoquic manually
+        run: |
+          mkdir -p .picoquic-build
+          cd .picoquic-build
+          cmake ../vendor/picoquic \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPICOQUIC_FETCH_PTLS=ON
+          cmake --build . --config Release -j$(sysctl -n hw.ncpu)
+          
+      - name: Set picoquic paths for Rust build
+        run: |
+          PICOQUIC_BUILD_DIR="$(pwd)/.picoquic-build"
+          echo "PICOQUIC_BUILD_DIR=$PICOQUIC_BUILD_DIR" >> $GITHUB_ENV
+          echo "PICOQUIC_LIB_DIR=$PICOQUIC_BUILD_DIR" >> $GITHUB_ENV
+          echo "PICOQUIC_INCLUDE_DIR=$(pwd)/vendor/picoquic/picoquic" >> $GITHUB_ENV
+          echo "PICOTLS_INCLUDE_DIR=$PICOQUIC_BUILD_DIR/_deps/picotls-src/include" >> $GITHUB_ENV
+          
+      - name: Build slipstream-client
+        run: |
+          cargo build --release -p slipstream-client
+          
+      - name: Verify binary
+        run: |
+          ls -lh target/release/slipstream-client || echo "Binary not found at expected location"
+          file target/release/slipstream-client || echo "Could not determine file type"
+          
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: slipstream-client-mac
-          path: |
-            target/release/slipstream*
-            !target/release/*.d
-            !target/release/*.rlib
-          if-no-files-found: warn
+          name: slipstream-client-macos-arm64
+          path: target/release/slipstream-client
+          if-no-files-found: error
