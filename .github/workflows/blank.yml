@@ -10,30 +10,35 @@ jobs:
         with:
           submodules: recursive
 
-      # ۱. تنظیم CMake سازگار
+      # ۱. تنظیم نسخه CMake سازگار
       - name: Setup CMake 3.29
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.29.x'
 
-      # ۲. نصب کتابخانه‌ها
+      # ۲. نصب پیش‌نیازها
       - name: Install dependencies
         run: brew install pkg-config openssl
 
-      # ۳. ساخت دستی کتابخانه Picoquic (بخش جدید)
+      # ۳. ساخت دستی کتابخانه C
       - name: Build Picoquic Manually
         run: |
           chmod +x scripts/build_picoquic.sh
           ./scripts/build_picoquic.sh
 
-      # ۴. بیلد کردن کلاینت (با اشاره به فایل‌های ساخته شده)
+      # ۴. بیلد کردن کلاینت (با آدرس‌دهی دقیق)
       - name: Build Client
         run: cargo build --release -p slipstream-client
         env:
-          # این متغیر می‌گوید: "بیلد خودکار را غیرفعال کن، چون دستی انجام دادیم"
-          PICOQUIC_AUTO_BUILD: 0 
+          PICOQUIC_AUTO_BUILD: 0
+          # آدرس‌دهی مستقیم به جایی که اسکریپت فایل‌ها را ساخته است
+          PICOQUIC_BUILD_DIR: ${{ github.workspace }}/.picoquic-build
+          PICOQUIC_LIB_DIR: ${{ github.workspace }}/.picoquic-build
+          # آدرس هدرهای مورد نیاز
+          PICOQUIC_INCLUDE_DIR: ${{ github.workspace }}/vendor/picoquic/picoquic
+          PICOTLS_INCLUDE_DIR: ${{ github.workspace }}/.picoquic-build/_deps/picotls-src/include
 
-      # ۵. آپلود فایل نهایی
+      # ۵. آپلود فایل
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
