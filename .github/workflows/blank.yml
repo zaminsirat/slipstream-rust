@@ -30,23 +30,6 @@ jobs:
           
           chmod +x scripts/build_picoquic.sh
           ./scripts/build_picoquic.sh
-          
-          echo "=== Built libraries ==="
-          find .picoquic-build -name "*.a" -type f
-
-      - name: Debug build.rs requirements
-        run: |
-          echo "=== Checking build.rs for slipstream-ffi ==="
-          cat crates/slipstream-ffi/build.rs || echo "build.rs not found at expected path"
-          
-          echo ""
-          echo "=== Full directory structure of .picoquic-build ==="
-          find .picoquic-build -type f -name "*.a" -o -name "*.h" | head -50
-          
-          echo ""
-          echo "=== Looking for picoquic headers ==="
-          find . -name "picoquic.h" -type f 2>/dev/null
-          find . -name "picosocks.h" -type f 2>/dev/null
 
       - name: Set environment variables
         run: |
@@ -58,51 +41,32 @@ jobs:
           echo "PICOQUIC_LIB_DIR=$BUILD_DIR" >> $GITHUB_ENV
           echo "PICOQUIC_INCLUDE_DIR=$VENDOR_DIR/picoquic" >> $GITHUB_ENV
           echo "PICOTLS_INCLUDE_DIR=$BUILD_DIR/_deps/picotls-src/include" >> $GITHUB_ENV
-          
-          # Also set PICOQUIC_DIR as some build scripts check this
           echo "PICOQUIC_DIR=$VENDOR_DIR" >> $GITHUB_ENV
-          
           echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
           echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
 
-      - name: Verify all paths exist
-        run: |
-          echo "=== Verifying paths ==="
-          
-          echo "Checking PICOQUIC_LIB_DIR: $PICOQUIC_LIB_DIR"
-          ls -la "$PICOQUIC_LIB_DIR"/*.a 2>/dev/null || echo "No .a files in root"
-          
-          echo ""
-          echo "Checking for libpicoquic-core.a:"
-          ls -la "$PICOQUIC_LIB_DIR"/libpicoquic-core.a
-          
-          echo ""
-          echo "Checking PICOQUIC_INCLUDE_DIR: $PICOQUIC_INCLUDE_DIR"
-          ls "$PICOQUIC_INCLUDE_DIR"/*.h 2>/dev/null | head -5 || echo "No headers found"
-          
-          echo ""
-          echo "Checking PICOTLS_INCLUDE_DIR: $PICOTLS_INCLUDE_DIR"
-          ls "$PICOTLS_INCLUDE_DIR"/*.h 2>/dev/null | head -5 || echo "No picotls headers"
-          
-          echo ""
-          echo "Checking picotls libraries:"
-          ls -la "$PICOQUIC_LIB_DIR"/_deps/picotls-build/*.a 2>/dev/null || echo "No picotls libs"
-
       - name: Build slipstream-client
+        run: cargo build --release -p slipstream-client
+
+      - name: Find built binary
         run: |
-          # Enable verbose output from build.rs
-          export CARGO_LOG=cargo::core::compiler::fingerprint=info
-          export RUST_BACKTRACE=1
+          echo "=== Contents of target/release ==="
+          ls -la target/release/ | head -30
           
-          cargo build --release -p slipstream-client -vv 2>&1 | tee build.log || {
-            echo "=== Build failed, showing last 100 lines ==="
-            tail -100 build.log
-            exit 1
-          }
+          echo ""
+          echo "=== All executables in target/release ==="
+          find target/release -maxdepth 1 -type f -perm +111 ! -name "*.d" ! -name "*.rlib" | head -20
+          
+          echo ""
+          echo "=== Looking for slipstream* files ==="
+          find target/release -maxdepth 1 -name "slipstream*" -type f
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: slipstream-client-mac
-          path: target/release/slipstream-client
+          path: |
+            target/release/slipstream*
+            !target/release/*.d
+            !target/release/*.rlib
