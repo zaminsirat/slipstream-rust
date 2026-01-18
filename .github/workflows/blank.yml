@@ -10,19 +10,21 @@ jobs:
         with:
           submodules: recursive
 
+      # ۱. نصب نسخه خاصی از CMake که با پروژه سازگار است
+      - name: Setup CMake 3.29
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.29.x'
+
+      # ۲. نصب سایر پیش‌نیازها (بدون نصب cmake جدید)
       - name: Install dependencies
-        run: brew install cmake pkg-config openssl
+        run: brew install pkg-config openssl
 
-      # --- بخش جدید برای حل مشکل ---
-      - name: Fix CMake Version Issue
-        run: |
-          # پیدا کردن تمام فایل‌های CMake و تغییر حداقل نسخه مورد نیاز به 3.10
-          find vendor -name "CMakeLists.txt" -exec sed -i '' 's/cmake_minimum_required(VERSION [0-9.]*)/cmake_minimum_required(VERSION 3.10)/g' {} +
-      # -----------------------------
-
+      # ۳. بیلد کردن پروژه
       - name: Build Client
         run: cargo build --release -p slipstream-client
 
+      # ۴. آپلود فایل نهایی
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
