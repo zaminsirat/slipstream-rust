@@ -13,6 +13,13 @@ jobs:
       - name: Install dependencies
         run: brew install cmake pkg-config openssl
 
+      # --- بخش جدید برای حل مشکل ---
+      - name: Fix CMake Version Issue
+        run: |
+          # پیدا کردن تمام فایل‌های CMake و تغییر حداقل نسخه مورد نیاز به 3.10
+          find vendor -name "CMakeLists.txt" -exec sed -i '' 's/cmake_minimum_required(VERSION [0-9.]*)/cmake_minimum_required(VERSION 3.10)/g' {} +
+      # -----------------------------
+
       - name: Build Client
         run: cargo build --release -p slipstream-client
 
