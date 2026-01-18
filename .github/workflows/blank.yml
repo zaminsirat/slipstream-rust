@@ -20,23 +20,55 @@ jobs:
       - name: Install dependencies
         run: |
           brew install pkg-config openssl@3
-          
-      - name: Build slipstream-client (with auto picoquic build)
-        env:
-          OPENSSL_ROOT_DIR: /opt/homebrew/opt/openssl@3
-          OPENSSL_DIR: /opt/homebrew/opt/openssl@3
-          PKG_CONFIG_PATH: /opt/homebrew/opt/openssl@3/lib/pkgconfig
-          # Don't set PICOQUIC_AUTO_BUILD=0, let cargo auto-build it
+
+      - name: Build Picoquic manually
         run: |
-          # Show OpenSSL location
-          echo "OpenSSL location: $(brew --prefix openssl@3)"
-          
-          # Update env vars with actual brew prefix (in case it's different)
           export OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
           export OPENSSL_DIR=$(brew --prefix openssl@3)
           export PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig
           
-          # Let cargo auto-build picoquic
+          mkdir -p .picoquic-build
+          cd .picoquic-build
+          
+          cmake ../vendor/picoquic \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
+          
+          cmake --build . --config Release
+          
+          echo "=== Built libraries ==="
+          find . -name "*.a" -type f
+          
+      - name: Set environment variables
+        run: |
+          BUILD_DIR="${{ github.workspace }}/.picoquic-build"
+          
+          echo "PICOQUIC_AUTO_BUILD=0" >> $GITHUB_ENV
+          echo "PICOQUIC_BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
+          echo "PICOQUIC_LIB_DIR=$BUILD_DIR" >> $GITHUB_ENV
+          echo "PICOQUIC_INCLUDE_DIR=${{ github.workspace }}/vendor/picoquic/picoquic" >> $GITHUB_ENV
+          echo "PICOTLS_INCLUDE_DIR=$BUILD_DIR/_deps/picotls-src/include" >> $GITHUB_ENV
+          
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
+
+      - name: Verify setup and build
+        run: |
+          echo "=== Environment ==="
+          echo "PICOQUIC_AUTO_BUILD=$PICOQUIC_AUTO_BUILD"
+          echo "PICOQUIC_BUILD_DIR=$PICOQUIC_BUILD_DIR"
+          echo "PICOQUIC_LIB_DIR=$PICOQUIC_LIB_DIR"
+          echo "PICOQUIC_INCLUDE_DIR=$PICOQUIC_INCLUDE_DIR"
+          echo "PICOTLS_INCLUDE_DIR=$PICOTLS_INCLUDE_DIR"
+          
+          echo "=== Checking files ==="
+          ls -la "$PICOQUIC_LIB_DIR"/libpicoquic*.a || echo "No libpicoquic*.a found"
+          ls -la "$PICOQUIC_LIB_DIR"/_deps/picotls-build/libpicotls*.a || echo "No libpicotls*.a found"
+          ls -la "$PICOQUIC_INCLUDE_DIR"/ | head -5
+          ls -la "$PICOTLS_INCLUDE_DIR"/ | head -5
+          
+          echo "=== Building slipstream-client ==="
           cargo build --release -p slipstream-client
 
       - name: Upload Artifact
