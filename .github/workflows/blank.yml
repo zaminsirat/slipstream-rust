@@ -10,43 +10,45 @@ jobs:
         with:
           submodules: recursive
 
-      # ۱. تنظیم CMake 3.29 (حیاتی برای این پروژه)
+      # 1. Setup CMake 3.29
       - name: Setup CMake 3.29
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.29.x'
 
-      # ۲. نصب OpenSSL و pkg-config
+      # 2. Install OpenSSL and pkg-config
       - name: Install dependencies
         run: |
           brew install pkg-config openssl
-          # تنظیم متغیرهای محیطی برای اینکه OpenSSL در مک پیدا شود
           echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
           echo "PKG_CONFIG_PATH=$(brew --prefix openssl)/lib/pkgconfig" >> $GITHUB_ENV
 
-      # ۳. ساخت دستی کتابخانه Picoquic
+      # 3. Build Picoquic Manually
       - name: Build Picoquic Manually
         run: |
           chmod +x scripts/build_picoquic.sh
           ./scripts/build_picoquic.sh
 
-      # ۴. پیدا کردن هوشمند مسیر فایل‌ها (جادوی کار اینجاست!)
-      # این دستور می‌گردد ببیند فایل libpicoquic-core.a دقیقاً کجاست و آدرسش را ذخیره می‌کند
-      - name: Locate Libraries and Build
+      # 4. Set environment variables for Cargo build
+      - name: Set Picoquic Environment Variables
         run: |
-          # پیدا کردن مسیر فایل ساخته شده
+          # Find where libpicoquic-core.a was built
           LIB_PATH=$(find . -name "libpicoquic-core.a" -exec dirname {} \; | head -n 1)
           echo "Library found at: $LIB_PATH"
           
-          # اجرای بیلد با آدرس دقیق پیدا شده
-          export PICOQUIC_AUTO_BUILD=0
-          export PICOQUIC_LIB_DIR="$LIB_PATH"
-          export PICOQUIC_INCLUDE_DIR="${{ github.workspace }}/vendor/picoquic/picoquic"
-          export PICOTLS_INCLUDE_DIR="${{ github.workspace }}/.picoquic-build/_deps/picotls-src/include"
-          
+          # Store in GITHUB_ENV so they persist to the next step
+          echo "PICOQUIC_AUTO_BUILD=0" >> $GITHUB_ENV
+          echo "PICOQUIC_LIB_DIR=$LIB_PATH" >> $GITHUB_ENV
+          echo "PICOQUIC_INCLUDE_DIR=${{ github.workspace }}/vendor/picoquic/picoquic" >> $GITHUB_ENV
+          echo "PICOTLS_INCLUDE_DIR=${{ github.workspace }}/.picoquic-build/_deps/picotls-src/include" >> $GITHUB_ENV
+          echo "PICOQUIC_BUILD_DIR=${{ github.workspace }}/.picoquic-build" >> $GITHUB_ENV
+
+      # 5. Build with Cargo
+      - name: Build Slipstream Client
+        run: |
           cargo build --release -p slipstream-client
 
-      # ۵. آپلود فایل نهایی
+      # 6. Upload final artifact
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
