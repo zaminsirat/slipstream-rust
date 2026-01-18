@@ -1,5 +1,4 @@
 name: Build Mac Client
-
 on: workflow_dispatch
 
 jobs:
@@ -10,45 +9,78 @@ jobs:
         with:
           submodules: recursive
 
-      # 1. Setup CMake 3.29
       - name: Setup CMake 3.29
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: '3.29.x'
 
-      # 2. Install OpenSSL and pkg-config
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
       - name: Install dependencies
         run: |
-          brew install pkg-config openssl
-          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$(brew --prefix openssl)/lib/pkgconfig" >> $GITHUB_ENV
+          brew install pkg-config openssl@3
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
 
-      # 3. Build Picoquic Manually
-      - name: Build Picoquic Manually
+      - name: Build Picoquic
         run: |
           chmod +x scripts/build_picoquic.sh
           ./scripts/build_picoquic.sh
-
-      # 4. Set environment variables for Cargo build
-      - name: Set Picoquic Environment Variables
-        run: |
-          # Find where libpicoquic-core.a was built
-          LIB_PATH=$(find . -name "libpicoquic-core.a" -exec dirname {} \; | head -n 1)
-          echo "Library found at: $LIB_PATH"
           
-          # Store in GITHUB_ENV so they persist to the next step
-          echo "PICOQUIC_AUTO_BUILD=0" >> $GITHUB_ENV
-          echo "PICOQUIC_LIB_DIR=$LIB_PATH" >> $GITHUB_ENV
-          echo "PICOQUIC_INCLUDE_DIR=${{ github.workspace }}/vendor/picoquic/picoquic" >> $GITHUB_ENV
-          echo "PICOTLS_INCLUDE_DIR=${{ github.workspace }}/.picoquic-build/_deps/picotls-src/include" >> $GITHUB_ENV
-          echo "PICOQUIC_BUILD_DIR=${{ github.workspace }}/.picoquic-build" >> $GITHUB_ENV
+          # Debug: Show what was built
+          echo "=== Contents of .picoquic-build ==="
+          find .picoquic-build -name "*.a" 2>/dev/null || echo "No .a files found in .picoquic-build"
+          
+          echo "=== Looking for libpicoquic-core.a ==="
+          find . -name "libpicoquic-core.a" 2>/dev/null || echo "Not found"
+          
+          echo "=== Looking for all picoquic libs ==="
+          find . -name "libpicoquic*.a" 2>/dev/null || echo "Not found"
 
-      # 5. Build with Cargo
-      - name: Build Slipstream Client
+      - name: Build slipstream-client
         run: |
+          # Set the build directory path (default output of build_picoquic.sh)
+          BUILD_DIR="${{ github.workspace }}/.picoquic-build"
+          
+          # Find library directory (it's typically in the build root or a subdirectory)
+          LIB_DIR=$(find "$BUILD_DIR" -name "libpicoquic-core.a" -exec dirname {} \; | head -n 1)
+          
+          if [ -z "$LIB_DIR" ]; then
+            echo "ERROR: Could not find libpicoquic-core.a"
+            echo "Contents of build directory:"
+            ls -laR "$BUILD_DIR" || echo "Build dir not found"
+            exit 1
+          fi
+          
+          echo "Found libraries at: $LIB_DIR"
+          ls -la "$LIB_DIR"
+          
+          # Export all required environment variables
+          export PICOQUIC_AUTO_BUILD=0
+          export PICOQUIC_LIB_DIR="$LIB_DIR"
+          export PICOQUIC_BUILD_DIR="$BUILD_DIR"
+          export PICOQUIC_INCLUDE_DIR="${{ github.workspace }}/vendor/picoquic/picoquic"
+          export PICOTLS_INCLUDE_DIR="$BUILD_DIR/_deps/picotls-src/include"
+          
+          # Also try alternate picotls location if the above doesn't exist
+          if [ ! -d "$PICOTLS_INCLUDE_DIR" ]; then
+            PICOTLS_INCLUDE_DIR=$(find "$BUILD_DIR" -type d -name "include" -path "*picotls*" | head -n 1)
+            if [ -n "$PICOTLS_INCLUDE_DIR" ]; then
+              export PICOTLS_INCLUDE_DIR
+            fi
+          fi
+          
+          echo "=== Environment variables ==="
+          echo "PICOQUIC_LIB_DIR=$PICOQUIC_LIB_DIR"
+          echo "PICOQUIC_BUILD_DIR=$PICOQUIC_BUILD_DIR"
+          echo "PICOQUIC_INCLUDE_DIR=$PICOQUIC_INCLUDE_DIR"
+          echo "PICOTLS_INCLUDE_DIR=$PICOTLS_INCLUDE_DIR"
+          
+          # Build
           cargo build --release -p slipstream-client
 
-      # 6. Upload final artifact
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
